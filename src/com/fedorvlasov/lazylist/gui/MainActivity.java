@@ -1,4 +1,6 @@
-package com.fedorvlasov.lazylist;
+package com.fedorvlasov.lazylist.gui;
+
+import com.fedorvlasov.lazylist.R;
 
 import android.app.Activity;
 import android.os.Bundle;

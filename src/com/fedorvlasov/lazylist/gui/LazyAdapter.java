@@ -1,4 +1,7 @@
-package com.fedorvlasov.lazylist;
+package com.fedorvlasov.lazylist.gui;
+
+import com.fedorvlasov.lazylist.ImageLoader;
+import com.fedorvlasov.lazylist.R;
 
 import android.app.Activity;
 import android.content.Context;
@@ -20,7 +23,7 @@ public class LazyAdapter extends BaseAdapter {
         activity = a;
         data=d;
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        imageLoader=new ImageLoader(activity.getApplicationContext());
+        imageLoader=new ImageLoader(activity.getApplicationContext(), R.drawable.stub);
     }
 
     public int getCount() {
@@ -43,7 +46,7 @@ public class LazyAdapter extends BaseAdapter {
         TextView text=(TextView)vi.findViewById(R.id.text);;
         ImageView image=(ImageView)vi.findViewById(R.id.image);
         text.setText("item "+position);
-        imageLoader.DisplayImage(data[position], image);
+        imageLoader.displayImage(data[position], image);
         return vi;
     }
 }
