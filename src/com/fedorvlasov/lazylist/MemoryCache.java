@@ -1,5 +1,6 @@
 package com.fedorvlasov.lazylist;
 
+import java.lang.ref.SoftReference;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -11,8 +12,8 @@ import android.util.Log;
 public class MemoryCache {
 
     private static final String TAG = "MemoryCache";
-    private Map<String, Bitmap> cache=Collections.synchronizedMap(
-            new LinkedHashMap<String, Bitmap>(10,1.5f,true));//Last argument true for LRU ordering
+    private Map<String, SoftReference<Bitmap>> cache=Collections.synchronizedMap(
+            new LinkedHashMap<String, SoftReference<Bitmap>>(10,1.5f,true));//Last argument true for LRU ordering
     private long size=0;//current allocated size
     private long limit=1000000;//max memory in bytes
 
@@ -21,28 +22,38 @@ public class MemoryCache {
         setLimit(Runtime.getRuntime().maxMemory()/4);
     }
     
+    protected boolean containsKey(String id) {
+		try {
+			if (!cache.containsKey(id)) { 
+				return false; 
+			}
+			// NullPointerException sometimes happen here
+			// http://code.google.com/p/osmdroid/issues/detail?id=78
+		} catch (NullPointerException ex) {
+			ex.printStackTrace();
+			return false;
+		}
+		return cache.get(id).get() != null;
+    }
+    
     public void setLimit(long new_limit){
         limit=new_limit;
         Log.i(TAG, "MemoryCache will use up to "+limit/1024./1024.+"MB");
     }
 
     public Bitmap get(String id){
-        try{
-            if(!cache.containsKey(id))
-                return null;
-            //NullPointerException sometimes happen here http://code.google.com/p/osmdroid/issues/detail?id=78 
-            return cache.get(id);
-        }catch(NullPointerException ex){
-            ex.printStackTrace();
-            return null;
-        }
+    	if (containsKey(id)) {
+    		return cache.get(id).get();
+    	}
+    	return null;
     }
-
+    
     public void put(String id, Bitmap bitmap){
         try{
-            if(cache.containsKey(id))
-                size-=getSizeInBytes(cache.get(id));
-            cache.put(id, bitmap);
+        	if (containsKey(id)) {
+        		size-=getSizeInBytes(cache.get(id).get());
+        	}
+            cache.put(id, new SoftReference<Bitmap>(bitmap));
             size+=getSizeInBytes(bitmap);
             checkSize();
         }catch(Throwable th){
@@ -53,10 +64,14 @@ public class MemoryCache {
     private void checkSize() {
         Log.i(TAG, "cache size="+size+" length="+cache.size());
         if(size>limit){
-            Iterator<Entry<String, Bitmap>> iter=cache.entrySet().iterator();//least recently accessed item will be the first one iterated  
+            //clearCacheReference();
+            Iterator<Entry<String, SoftReference<Bitmap>>> iter=cache.entrySet().iterator();//least recently accessed item will be the first one iterated  
             while(iter.hasNext()){
-                Entry<String, Bitmap> entry=iter.next();
-                size-=getSizeInBytes(entry.getValue());
+                Entry<String, SoftReference<Bitmap>> entry=iter.next();
+                Bitmap bitmap = entry.getValue().get();
+                if (bitmap != null) {
+                	size-=getSizeInBytes(bitmap);
+                }
                 iter.remove();
                 if(size<=limit)
                     break;
@@ -64,7 +79,17 @@ public class MemoryCache {
             Log.i(TAG, "Clean cache. New size "+cache.size());
         }
     }
-
+    
+    protected void clearCacheReference() {
+    	Iterator<Entry<String, SoftReference<Bitmap>>> iter=cache.entrySet().iterator();//least recently accessed item will be the first one iterated  
+        while(iter.hasNext()){
+            Entry<String, SoftReference<Bitmap>> entry=iter.next();
+            if(entry.getValue().get() == null) {
+            	iter.remove();
+            }
+        }
+    }
+    
     public void clear() {
         try{
             //NullPointerException sometimes happen here http://code.google.com/p/osmdroid/issues/detail?id=78 

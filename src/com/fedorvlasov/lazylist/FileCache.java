@@ -5,12 +5,17 @@ import android.content.Context;
 
 public class FileCache {
     
+	private final static String CACHE_PATH = "/Android/data/<package_name>/cache/";
+	
     private File cacheDir;
     
     public FileCache(Context context){
         //Find the dir to save cached images
-        if (android.os.Environment.getExternalStorageState().equals(android.os.Environment.MEDIA_MOUNTED))
-            cacheDir=new File(android.os.Environment.getExternalStorageDirectory(),"LazyList");
+        if (android.os.Environment.getExternalStorageState().equals(android.os.Environment.MEDIA_MOUNTED)) {
+        	String path = CACHE_PATH.replace("<package_name>", context.getPackageName());
+            //cacheDir=new File(android.os.Environment.getExternalStorageDirectory(),"LazyList");
+        	cacheDir=new File(android.os.Environment.getExternalStorageDirectory() + path);
+        }
         else
             cacheDir=context.getCacheDir();
         if(!cacheDir.exists())

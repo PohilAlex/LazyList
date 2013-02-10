@@ -23,7 +23,7 @@ public class LazyAdapter extends BaseAdapter {
         activity = a;
         data=d;
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        imageLoader=new ImageLoader(activity.getApplicationContext(), R.drawable.stub);
+        imageLoader= ImageLoader.getInstance();//new ImageLoader(activity.getApplicationContext(), R.drawable.stub);
     }
 
     public int getCount() {

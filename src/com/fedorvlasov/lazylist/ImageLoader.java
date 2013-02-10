@@ -15,13 +15,15 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import android.os.Handler;
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.widget.ImageView;
 
 public class ImageLoader {
     
+	private static final String ERROR_INIT_CONFIG = "Imageloader not configured. Initialize it with init() method.";
+	
+	private static ImageLoader instance;
     MemoryCache memoryCache=new MemoryCache();
     FileCache fileCache;
     private Map<ImageView, String> imageViews=Collections.synchronizedMap(new WeakHashMap<ImageView, String>());
@@ -29,15 +31,43 @@ public class ImageLoader {
     Handler handler=new Handler();//handler to display images in UI thread
     int threadNumber = 4;
     int stub_id;
+    boolean isInit = false;
     
-    public ImageLoader(Context context, int stub_id) {
-        fileCache=new FileCache(context);
-        this. stub_id = stub_id;
+    public void init(ImageLoaderConfiguration config) {
+    	fileCache = new FileCache(config.conext);
+    	if (config.stub_id > 0) {
+    		stub_id = config.stub_id;
+    	}
+    	if (config.threadNumber > 0) {
+    		threadNumber = config.threadNumber;
+    	}
         executorService=Executors.newFixedThreadPool(threadNumber);
+        if (config.memoryCashSize > 0) {
+        	memoryCache.setLimit(config.memoryCashSize);
+        }
+        isInit = true;
     }
+    
+    private ImageLoader(/*Context context, int stub_id*/) {
+        //fileCache=new FileCache(context);
+        //this.stub_id = stub_id;
+        //executorService=Executors.newFixedThreadPool(threadNumber);
+    }
+    
+    public static ImageLoader getInstance() {
+		if (instance == null) {
+			instance = new ImageLoader();
+		}
+		return instance;
+	}
+    
+    
     
     public void displayImage(String url, ImageView imageView)
     {
+    	if (!isInit) {
+    		throw new IllegalArgumentException(ERROR_INIT_CONFIG);
+    	}
         imageViews.put(imageView, url);
         Bitmap bitmap=memoryCache.get(url);
         if(bitmap!=null)
