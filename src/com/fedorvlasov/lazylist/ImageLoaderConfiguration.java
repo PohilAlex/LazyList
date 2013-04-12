@@ -4,9 +4,10 @@ import android.content.Context;
 
 public class ImageLoaderConfiguration {
 	
+	public static int THREAD_NUMBER_DEFAULT = 4;  
 	Context conext;
 	int stub_id = -1;
-	int threadNumber = -1 ;
+	int threadNumber = THREAD_NUMBER_DEFAULT;
 	int memoryCashSize = -1;
 	
 	public ImageLoaderConfiguration(Context conext) {

@@ -29,17 +29,14 @@ public class ImageLoader {
     private Map<ImageView, String> imageViews=Collections.synchronizedMap(new WeakHashMap<ImageView, String>());
     ExecutorService executorService;
     Handler handler=new Handler();//handler to display images in UI thread
-    int threadNumber = 4;
     int stub_id;
     boolean isInit = false;
     
     public void init(ImageLoaderConfiguration config) {
     	fileCache = new FileCache(config.conext);
+		int threadNumber = config.threadNumber;
     	if (config.stub_id > 0) {
     		stub_id = config.stub_id;
-    	}
-    	if (config.threadNumber > 0) {
-    		threadNumber = config.threadNumber;
     	}
         executorService=Executors.newFixedThreadPool(threadNumber);
         if (config.memoryCashSize > 0) {
@@ -48,10 +45,7 @@ public class ImageLoader {
         isInit = true;
     }
     
-    private ImageLoader(/*Context context, int stub_id*/) {
-        //fileCache=new FileCache(context);
-        //this.stub_id = stub_id;
-        //executorService=Executors.newFixedThreadPool(threadNumber);
+    private ImageLoader() {
     }
     
     public static ImageLoader getInstance() {
@@ -61,9 +55,7 @@ public class ImageLoader {
 		return instance;
 	}
     
-    
-    
-    public void displayImage(String url, ImageView imageView)
+    public void displayImage(String url, ImageView imageView, boolean isCompress)
     {
     	if (!isInit) {
     		throw new IllegalArgumentException(ERROR_INIT_CONFIG);
@@ -74,30 +66,29 @@ public class ImageLoader {
             imageView.setImageBitmap(bitmap);
         else
         {
-            queuePhoto(url, imageView);
+        	PhotoToLoad p = new PhotoToLoad(url, imageView, isCompress);
+            executorService.submit(new PhotosLoader(p));
             imageView.setImageResource(stub_id);
         }
     }
-        
-    private void queuePhoto(String url, ImageView imageView)
-    {
-        PhotoToLoad p=new PhotoToLoad(url, imageView);
-        executorService.submit(new PhotosLoader(p));
+    
+    public void displayImage(String url, ImageView imageView) {
+    	displayImage(url, imageView, true);
     }
     
-    private Bitmap getBitmap(String url) 
+    private Bitmap getBitmap(PhotoToLoad photo) 
     {
-        File f=fileCache.getFile(url);
+        File f=fileCache.getFile(photo.url);
         
         //from SD cache
-        Bitmap b = decodeFile(f);
+        Bitmap b = decodeFile(f, photo.isCompress);
         if(b!=null)
             return b;
         
         //from web
         try {
             Bitmap bitmap=null;
-            URL imageUrl = new URL(url);
+            URL imageUrl = new URL(photo.url);
             HttpURLConnection conn = (HttpURLConnection)imageUrl.openConnection();
             conn.setConnectTimeout(30000);
             conn.setReadTimeout(30000);
@@ -106,7 +97,7 @@ public class ImageLoader {
             OutputStream os = new FileOutputStream(f);
             Utils.CopyStream(is, os);
             os.close();
-            bitmap = decodeFile(f);
+            bitmap = decodeFile(f, photo.isCompress);
             return bitmap;
         } catch (Throwable ex){
            ex.printStackTrace();
@@ -115,37 +106,15 @@ public class ImageLoader {
            return null;
         }
     }
-
-    //decodes image and scales it to reduce memory consumption
-    private Bitmap decodeFile(File f){
-        try {
-            //decode image size
-            BitmapFactory.Options o = new BitmapFactory.Options();
-            o.inJustDecodeBounds = true;
-            FileInputStream stream1=new FileInputStream(f);
-            BitmapFactory.decodeStream(stream1,null,o);
-            stream1.close();
-            
-            //Find the correct scale value. It should be the power of 2.
-            final int REQUIRED_SIZE=70;
-            int width_tmp=o.outWidth, height_tmp=o.outHeight;
-            int scale=1;
-            while(true){
-                if(width_tmp/2<REQUIRED_SIZE || height_tmp/2<REQUIRED_SIZE)
-                    break;
-                width_tmp/=2;
-                height_tmp/=2;
-                scale*=2;
-            }
-            
-            //decode with inSampleSize
-            BitmapFactory.Options o2 = new BitmapFactory.Options();
-            o2.inSampleSize=scale;
-            FileInputStream stream2=new FileInputStream(f);
-            Bitmap bitmap=BitmapFactory.decodeStream(stream2, null, o2);
-            stream2.close();
-            return bitmap;
-        } catch (FileNotFoundException e) {
+    
+    private Bitmap decodeFile(File f, boolean isCommpress){
+    	try {
+	    	if (isCommpress) {
+	    		return decodeFileCompress(f);
+	    	} else {
+	    		return decodeFileNoCompress(f);
+	    	}
+    	} catch (FileNotFoundException e) {
         } 
         catch (IOException e) {
             e.printStackTrace();
@@ -153,14 +122,56 @@ public class ImageLoader {
         return null;
     }
     
+    //decodes image and scales it to reduce memory consumption
+    private Bitmap decodeFileCompress(File f) throws FileNotFoundException, IOException {
+        //decode image size
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        FileInputStream stream1=new FileInputStream(f);
+        BitmapFactory.decodeStream(stream1,null,o);
+        stream1.close();
+        
+        //Find the correct scale value. It should be the power of 2.
+        final int REQUIRED_SIZE=70;
+        int width_tmp=o.outWidth, height_tmp=o.outHeight;
+        int scale=1;
+        while(true){
+            if(width_tmp/2<REQUIRED_SIZE || height_tmp/2<REQUIRED_SIZE)
+                break;
+            width_tmp/=2;
+            height_tmp/=2;
+            scale*=2;
+        }
+        
+        //decode with inSampleSize
+        BitmapFactory.Options o2 = new BitmapFactory.Options();
+        o2.inSampleSize=scale;
+        FileInputStream stream2=new FileInputStream(f);
+        Bitmap bitmap=BitmapFactory.decodeStream(stream2, null, o2);
+        stream2.close();
+        return bitmap;
+    }
+    
+    //decodes image without compress
+    private Bitmap decodeFileNoCompress(File f) throws FileNotFoundException, IOException {
+		FileInputStream stream;
+		stream = new FileInputStream(f);
+		Bitmap bitmap=BitmapFactory.decodeStream(stream);
+	    stream.close();
+	    return bitmap;
+    }
+    
     //Task for the queue
     private class PhotoToLoad
     {
         public String url;
         public ImageView imageView;
-        public PhotoToLoad(String u, ImageView i){
+        public boolean isCompress;
+        
+        public PhotoToLoad(String u, ImageView i, boolean isCompress){
             url=u; 
             imageView=i;
+            this.isCompress=isCompress;
         }
     }
     
@@ -175,7 +186,7 @@ public class ImageLoader {
             try{
                 if(imageViewReused(photoToLoad))
                     return;
-                Bitmap bmp=getBitmap(photoToLoad.url);
+                Bitmap bmp=getBitmap(photoToLoad);
                 memoryCache.put(photoToLoad.url, bmp);
                 if(imageViewReused(photoToLoad))
                     return;
@@ -216,15 +227,8 @@ public class ImageLoader {
         fileCache.clear();
     }
 
-	public void setThreadNumber(int threadNumber) {
-		this.threadNumber = threadNumber;
-	}
-
 	public void setStub_id(int stub_id) {
 		this.stub_id = stub_id;
 	}
-    
-	
-    
 
 }
