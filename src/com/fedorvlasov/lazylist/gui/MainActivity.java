@@ -1,5 +1,7 @@
 package com.fedorvlasov.lazylist.gui;
 
+import java.nio.channels.UnsupportedAddressTypeException;
+
 import com.fedorvlasov.lazylist.R;
 
 import android.app.Activity;
@@ -25,6 +27,7 @@ public class MainActivity extends Activity {
         
         Button b=(Button)findViewById(R.id.button1);
         b.setOnClickListener(listener);
+        //throw new UnsupportedAddressTypeException();
     }
     
     @Override
@@ -38,6 +41,7 @@ public class MainActivity extends Activity {
         @Override
         public void onClick(View arg0) {
             adapter.imageLoader.clearCache();
+            adapter.clearData();
             adapter.notifyDataSetChanged();
         }
     };

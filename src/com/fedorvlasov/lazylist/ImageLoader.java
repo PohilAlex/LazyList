@@ -14,9 +14,11 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import android.os.Handler;
+
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Handler;
+import android.util.Log;
 import android.widget.ImageView;
 
 public class ImageLoader {
@@ -55,25 +57,30 @@ public class ImageLoader {
 		return instance;
 	}
     
-    public void displayImage(String url, ImageView imageView, boolean isCompress)
+    public void displayImage(String url, ImageView imageView, boolean isCompress, ImageLoadListener listener)
     {
     	if (!isInit) {
     		throw new IllegalArgumentException(ERROR_INIT_CONFIG);
     	}
         imageViews.put(imageView, url);
         Bitmap bitmap=memoryCache.get(url);
-        if(bitmap!=null)
-            imageView.setImageBitmap(bitmap);
-        else
-        {
-        	PhotoToLoad p = new PhotoToLoad(url, imageView, isCompress);
-            executorService.submit(new PhotosLoader(p));
+        PhotoToLoad photoToLoad = new PhotoToLoad(url, imageView, isCompress, listener);
+        if(bitmap!=null) {
+            BitmapDisplayer bd=new BitmapDisplayer(bitmap, photoToLoad);
+            handler.post(bd);
+    	} else {
+            executorService.submit(new PhotosLoader(photoToLoad));
             imageView.setImageResource(stub_id);
-        }
+    	}
     }
     
+    public void displayImage(String url, ImageView imageView, boolean isCompress) {
+    	displayImage(url, imageView, isCompress, null);
+    }
+    
+    
     public void displayImage(String url, ImageView imageView) {
-    	displayImage(url, imageView, true);
+    	displayImage(url, imageView, true, null);
     }
     
     private Bitmap getBitmap(PhotoToLoad photo) 
@@ -97,6 +104,7 @@ public class ImageLoader {
             OutputStream os = new FileOutputStream(f);
             Utils.CopyStream(is, os);
             os.close();
+            conn.disconnect();
             bitmap = decodeFile(f, photo.isCompress);
             return bitmap;
         } catch (Throwable ex){
@@ -161,17 +169,23 @@ public class ImageLoader {
 	    return bitmap;
     }
     
+    public interface ImageLoadListener {
+    	void onComplete(ImageView image, Bitmap bitmap);
+    }
+    
     //Task for the queue
     private class PhotoToLoad
     {
         public String url;
         public ImageView imageView;
         public boolean isCompress;
+        public ImageLoadListener listener;
         
-        public PhotoToLoad(String u, ImageView i, boolean isCompress){
+        public PhotoToLoad(String u, ImageView i, boolean isCompress, ImageLoadListener l){
             url=u; 
             imageView=i;
             this.isCompress=isCompress;
+            this.listener = l;
         }
     }
     
@@ -200,8 +214,9 @@ public class ImageLoader {
     
     boolean imageViewReused(PhotoToLoad photoToLoad){
         String tag=imageViews.get(photoToLoad.imageView);
-        if(tag==null || !tag.equals(photoToLoad.url))
+        if(tag==null || !tag.equals(photoToLoad.url)) {
             return true;
+        }
         return false;
     }
     
@@ -213,12 +228,16 @@ public class ImageLoader {
         public BitmapDisplayer(Bitmap b, PhotoToLoad p){bitmap=b;photoToLoad=p;}
         public void run()
         {
+            if (photoToLoad.listener != null) {
+            	photoToLoad.listener.onComplete(photoToLoad.imageView, bitmap);
+            }
             if(imageViewReused(photoToLoad))
                 return;
-            if(bitmap!=null)
+            if(bitmap!=null) {
                 photoToLoad.imageView.setImageBitmap(bitmap);
-            else
+            } else {
                 photoToLoad.imageView.setImageResource(stub_id);
+            }
         }
     }
 
